@@ -16,6 +16,8 @@
 #define RED 2
 #define BLUE 3
 #define GREEN 4
+#define CLOCKWISE 1
+#define COUNTERCLOCKWISE 0
 
 //Error codes//
 //1 - Dynamic memory allocation failed
@@ -47,16 +49,19 @@ void printCard(Card card);
 Card drawCard();
 Card changeColor();
 Card taki(Player player, int color);
-Card turn(Player player, Card cardInPlay);
+Card turn(Player player, Card cardInPlay, int* playDirection, int* currentPlayerNum);
 void removeCard(Player player, int cardPosition);
+Card stop(int* currentPlayerNum, int color);
+Card changeDirection(int* gameDirection, int color);
+Card plus(int* currentPlayer, int color);
 
 int main()
 {
 	srand(time(NULL));
 	int numOfPlayers;
 	Player* players = NULL;
-	int* direction = 1;
-	int* currentTurn = 0;
+	int playDirection = CLOCKWISE;
+	int currentPlayerNum = 0; //Starting at 0
 	bool ongoing = true;
 
 	//Welcome massage
@@ -80,19 +85,44 @@ int main()
 
 	while (ongoing)
 	{
-		turn(players[*currentTurn], cardInPlay, *direction);
-		if (ongoing == false)
-			break;
-		*currentTurn++;
+		cardInPlay = turn(players[currentPlayerNum],cardInPlay, &playDirection, &currentPlayerNum );
+		//At the end of each turn check if that player won
+		if (players[currentPlayerNum].numOfCards == 0)
+		{
+			//If the last card placed was a plus card, gives another card to the player who placed it
+			if (cardInPlay.cardNum == PLUS)
+			{
+				players[currentPlayerNum].cards[0] = drawCard();
+				players[currentPlayerNum].numOfCards++;
+			}
+
+			//If the last card placed was a stop card and there were 2 players in game
+			//gives another card to the player who placed it
+			if (numOfPlayers == 2 && cardInPlay.cardNum == STOP)
+			{
+				players[currentPlayerNum].cards[0] = drawCard();
+				players[currentPlayerNum].numOfCards++;
+			}
+			else // There is a winner
+			{
+				ongoing = false;
+				break;
+			}
+		}
+
+		currentPlayerNum++;
 
 		//Keeps the rotation in the range of the number of players
-		if (*currentTurn >= numOfPlayers)
+		if (currentPlayerNum >= numOfPlayers)
 		{
-			*currentTurn -= numOfPlayers;
+			currentPlayerNum -= numOfPlayers;
 		}
+		printCard(cardInPlay);
 	}
 
-	printf("The winner is: %s", players[*currentTurn].name);
+	printf("The winner is: %s", players[currentPlayerNum].name); //TODO
+
+	//Statistics** TODO
 
 	//printf("The cards of player 1 are:\n");
 	//for (int i = 0; i < players[0].numOfCards; i++)
@@ -129,6 +159,7 @@ int scanPlayers(Player** players)
 
 	//Getting the name of each player
 	//and setting the amount of cards for each player to 0
+	//and initializing the "winner" flag to false
 	for (int i = 0; i < numOfPlayers; i++)
 	{
 		printf("Please enter the first name of player #%d:\n", i + 1);
@@ -177,13 +208,14 @@ Card changeColor()
 			break;
 		default:
 			returnCard.cardColor = NO_COLOR;
-			printf("Invalid choice! Please pick a number between 1-3.\n");
+			printf("Invalid choice! Please pick a number between 1-4.\n");
 		}
 	} while (returnCard.cardColor = NO_COLOR);
 
 	return returnCard;
 
 }
+
 //Returns the last card placed
 Card taki(Player player, int color)
 {
@@ -198,24 +230,30 @@ Card taki(Player player, int color)
 	{
 			printf("Please enter 0 if you want to finish your turn\nor 1-%d if you want to put one of your cards in the middle:\n", player.numOfCards);
 			scanf("%d", &choice);
+
 			if (choice = 0)
+			{
 				return lastPlacedCard;
+			}
+			
+			else if (player.cards[choice].cardNum == CHANGE_COLOR)
+			{
+				lastPlacedCard = changeColor();
+				removeCard(player, choice);
+				return lastPlacedCard;
+			}
+			else if (player.cards[choice].cardColor = color)
+			{
+				lastPlacedCard = player.cards[choice];
+				removeCard(player, choice);
+				player.numOfCards--;
+			}
 			else
 			{
-				if (player.cards[choice].cardColor = color)
-				{
-					lastPlacedCard = player.cards[choice];
-					removeCard(player, choice);
-					player.numOfCards--;
-				}
-					
-				else
-				{
-					printf("Invalid card! Try again.");
-				}
+				printf("Invalid card! Try again.");
 			}
 	}
-	
+	return lastPlacedCard;
 	
 }
 
@@ -298,96 +336,114 @@ void printCard(Card card)
 	printf("*********\n\n");
 }
 
-//Get the current player struct and the struct of the current card in play
-Card turn(Player player, Card cardInPlay)
+//Get the current player struct and the struct of the current card in play, a pointer for the current game direction and a pointer to the number of the current player
+Card turn(Player player, Card cardInPlay, int* playDirection, int* currentPlayerNum)
 {
 	//Print the player's name and it's cards
-	printf("%s's turn:\n");
+	printf("%s's turn:\n" , player.name);
 
 	for (int i = 1; i <= player.numOfCards; i++)
 	{
-		printf("\nCard #%d:", i);
+		printf("\nCard #%d:\n", i);
 		printCard(player.cards[i]);
 	}
 
 	int playerChoice;
 	int cardPosition;
 	bool valid = true;
-	Card returnCard;
+	Card returnCard = { 0 };
 	do
 	{
 		printf("Please enter 0 if you want to take a card from the deck\n");
 		printf("or 1 - %d if you want to put one of your cards in the middle:\n", player.numOfCards);
 		scanf("%d", &playerChoice);
 		cardPosition = playerChoice - 1;
-
+		
 		if (playerChoice == 0)
+			break;
+		else if ( (playerChoice > player.numOfCards) || (player.cards[cardPosition].cardColor != cardInPlay.cardColor && player.cards[cardPosition].cardColor != 0))
 		{
-			//Check if there is a need to allocate more memory to draw another card
-			if (player.numOfCards == player.maxCards)
-			{
-				//If so, reallocate more
-				player.cards = realloc(player.cards, player.maxCards * 2);
-				//Check if memory reallocation failed
-				if (player.cards = NULL)
-				{
-					exit(1);
-				}
-
-				//Update the tracker for the physical size
-				player.maxCards *= 2;
-			}
-
-			player.cards[player.numOfCards] = drawCard();
-			player.numOfCards++;
-
-			//Ends the turn without changing the current card in play
-			return cardInPlay;
-		}
-
-
-		//Checks if the chosen card is an invalid choice
-		else if (playerChoice > player.numOfCards || (player.cards[cardPosition].cardColor != cardInPlay.cardColor && player.cards[cardPosition].cardColor != 0))
-		{
-			printf("Invalid card! Try again");
+			printf("Invalid card! Try again\n");
 			valid = false;
 		}
+	} while (!valid);
 
-		//Checks if the chosen card is a special card
-		else if (player.cards[cardPosition].cardNum == CHANGE_COLOR)
+	//If a valid choice was entered:
+	if (playerChoice == 0)
+		//Drawing a card
+	{
+		//Check if there is a need to allocate more memory to draw another card
+		if (player.numOfCards == player.maxCards)
 		{
-		returnCard = changeColor();
-		}
-		else if (player.cards[cardPosition].cardNum == TAKI)
-		{
-			returnCard = taki(player, player.cards[cardPosition].cardColor);
-			// TODO IF THE LAST CARD WAS SPECIAL NEED TO APPLY EFFECT
-			//IF THERE WAS A CHANGECOLOR ALONG THE WAY THEN THE TURN ENDS
-		}
-		else if (player.cards[cardPosition].cardNum == PLUS)
-		{
-			//ADD TODO
-			//IF PLUS AS LAST THEN MUST TAKE ANOTHER ONE - GIVE another without asking
-		}
-		else if (player.cards[cardPosition].cardNum == STOP)
-		{
-			 //STOP ADD TODO (increase the index of the round by 1) (index should be pointer?)
-			//IF 2 PlAERS + GIVE THE CURRENT ANOTHER CARD WITHOUT ASKING
-		}
-		else if (player.cards[cardPosition].cardNum == CHANGE_DIRECTION)
-		{
-			//TODO ADD <-> reveres an index or something (index should be pointer?)
+			//If so, reallocate more
+			player.cards = (Card*)realloc(player.cards, player.maxCards * 2);
+			//Check if memory reallocation failed
+			if (player.cards = NULL)
+			{
+				exit(1);
+			}
+
+			//Update the tracker for the physical size
+			player.maxCards *= 2;
 		}
 
-		else
-		{
-			returnCard = player.cards[cardPosition];
-		}
+		player.cards[player.numOfCards] = drawCard();
+		player.numOfCards++;
 
-	} while (valid = false);
+		//Ends the turn without changing the current card in play
+		return cardInPlay;
+	}
+
+	//Checks if the chosen card is a special card
+	else if (player.cards[cardPosition].cardNum == CHANGE_COLOR)
+	{
+	returnCard = changeColor();
+	}
+
+	//Special case for the taki card (has a switch for calling other cards functions)
+	else if (player.cards[cardPosition].cardNum == TAKI)
+	{
+		returnCard = taki(player, player.cards[cardPosition].cardColor);
+		//If the last card placed in a taki is special, applies it's effects
+		//The effects of change color are embedded in the taki function itself
+		if (returnCard.cardNum > 9)
+		{
+			switch (returnCard.cardNum) //TODO FINISH CASE
+			{
+			case PLUS:
+				returnCard = plus(currentPlayerNum, returnCard.cardColor);
+				break;
+			case STOP:
+				returnCard = stop(currentPlayerNum, returnCard.cardColor);
+				break;
+			case CHANGE_DIRECTION:
+				returnCard = changeDirection(playDirection, returnCard.cardColor);
+				break;
+			}
+		}
+	}
+
+	else if (player.cards[cardPosition].cardNum == PLUS)
+	{
+		returnCard = plus(currentPlayerNum, returnCard.cardColor);
+	}
+	else if (player.cards[cardPosition].cardNum == STOP)
+	{
+		returnCard = stop(currentPlayerNum, returnCard.cardColor);
+		//IF 2 PlAERS + GIVE THE CURRENT ANOTHER CARD WITHOUT ASKING
+	}
+	else if (player.cards[cardPosition].cardNum == CHANGE_DIRECTION)
+	{
+		//TODO ADD <-> reveres an index or something (index should be pointer?)
+	}
+
+	else
+	{
+		returnCard = player.cards[cardPosition];
+	}
 	
 	//If a valid card was chosen, removes the chosen card from the player and set it as the card in play
-	removeCard(player, playerChoice);
+	removeCard(player, cardPosition);
 	return returnCard;
 }
 
@@ -399,4 +455,47 @@ void removeCard(Player player, int cardPosition)
 		player.cards[i] = player.cards[i + 1];
 	}
 
+}
+
+Card stop(int* currentPlayerNum, int color)
+{
+	Card returnCard;
+	returnCard.cardNum = STOP;
+	returnCard.cardColor = color;
+
+	*currentPlayerNum++;
+	
+
+	return returnCard;
+}
+
+Card changeDirection(int* gameDirection, int color)
+{
+	Card returnCard;
+	returnCard.cardNum = CHANGE_DIRECTION;
+	returnCard.cardColor = color;
+
+	//Apply the card's effect
+	if (*gameDirection == CLOCKWISE)
+	{
+		*gameDirection = COUNTERCLOCKWISE;
+	}
+	else
+	{
+		*gameDirection = CLOCKWISE;
+	}
+
+	return returnCard;
+}
+
+Card plus(int* currentPlayer, int color)
+{
+	Card returnCard;
+	returnCard.cardNum = PLUS;
+	returnCard.cardColor = color;
+
+	//Apply the card's effect
+	*currentPlayer--;
+
+	return returnCard;
 }
