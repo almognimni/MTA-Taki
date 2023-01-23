@@ -19,6 +19,7 @@
 #define CLOCKWISE 1
 #define COUNTERCLOCKWISE 0
 #define STARTING_CARDS 4
+#define CARDS_VARIATIONS 14
 
 //Error codes//
 //1 - Dynamic memory allocation failed
@@ -43,78 +44,76 @@ typedef struct Player
 	int maxCards;
 } Player;
 
+typedef struct GameState
+{
+	int gameDirection; //0 or 1
+	int numOfPlayers;
+	int currentPlayerTurn; //starting at 0
+	Card upperCard;
+	int statistics[CARDS_VARIATIONS]; //used to keep track of drawn cards
+
+} GameState;
+
 //Function decelerations//
 int scanPlayers(Player** players);
-void handCards(Player* players, int numOfPlayers);
+void handCards(Player* players, GameState* gameState);
 void printCard(Card card);
 void printCards(Player player);
-Card genRndCard();
+Card genRndCard(GameState* gameState);
 Card changeColor();
 Card taki(Player* player, int cardPosition);
-Card turn(Player* player, Card cardInPlay, int* playDirection, int* currentPlayerNum);
+Card turn(Player* player, GameState* gameState);
 void removeCard(Player* player, int cardPosition);
-Card stop(int* currentPlayerNum, int color);
-Card changeDirection(int* gameDirection, int color);
-Card plus(int* currentPlayer, int color);
+Card stop(GameState* gameState, int color);
+Card changeDirection(GameState* gameState, int color);
+Card plus(GameState* gameState, int color);
 void drawCard(Player* player);
-
-void exampl(int** outputInt, int* outputSize)
-{
-	int* num = NULL;
-	num = (int*)malloc(10 * sizeof(int));
-	num[1] = 5;
-	*outputInt = num;
-	*outputSize = 10;
-
-}
+void printStatistics(GameState);
 
 int main()
 {
 	srand(time(NULL));
-	int numOfPlayers;
 	Player* players = NULL;
-	int playDirection = CLOCKWISE;
-	int currentPlayerNum = 0; //Starting at 0
+	GameState gameState = { 0 };
 	bool ongoing = true;
 
 	//Welcome massage
 	printf("************  Welcome to TAKI game !!! ***********\n");
 
 	//Scan the number of players and their names
-	numOfPlayers = scanPlayers(&players);
+	gameState.numOfPlayers = scanPlayers(&players);
 
 	//Hand 4 cards for each player
-	handCards(players, numOfPlayers);
+	handCards(players, &gameState);
 
 	//Pick a starting card - If the card is a special card, pick again
-	Card cardInPlay;
 	do
 	{
-		cardInPlay = genRndCard();
-	} while (cardInPlay.cardNum > 9);
+		gameState.upperCard = genRndCard(&gameState);
+	} while (gameState.upperCard.cardNum > 9);
 
 	printf("Upper card:\n");
-	printCard(cardInPlay);
+	printCard(gameState.upperCard);
 
 	while (ongoing)
 	{
-		cardInPlay = turn(&players[currentPlayerNum], cardInPlay, &playDirection, &currentPlayerNum);
+		gameState.upperCard = turn(&players[gameState.currentPlayerTurn], &gameState);
 		//At the end of each turn check if that player won
-		if (players[currentPlayerNum].numOfCards == 0)
+		if (players[gameState.currentPlayerTurn].numOfCards == 0)
 		{
 			//If the last card placed was a plus card, gives another card to the player who placed it
-			if (cardInPlay.cardNum == PLUS)
+			if (gameState.upperCard.cardNum == PLUS)
 			{
-				players[currentPlayerNum].cards[0] = genRndCard();
-				players[currentPlayerNum].numOfCards++;
+				players[gameState.currentPlayerTurn].cards[0] = genRndCard(&gameState);
+				players[gameState.currentPlayerTurn].numOfCards++;
 			}
 
 			//If the last card placed was a stop card and there were 2 players in game
 			//gives another card to the player who placed it
-			if (numOfPlayers == 2 && cardInPlay.cardNum == STOP)
+			if (gameState.numOfPlayers == 2 && gameState.upperCard.cardNum == STOP)
 			{
-				players[currentPlayerNum].cards[0] = genRndCard();
-				players[currentPlayerNum].numOfCards++;
+				players[gameState.currentPlayerTurn].cards[0] = genRndCard(&gameState);
+				players[gameState.currentPlayerTurn].numOfCards++;
 			}
 			else // There is a winner
 			{
@@ -123,38 +122,34 @@ int main()
 			}
 		}
 		
-		switch (playDirection)
+		switch (gameState.gameDirection)
 		{
 		case CLOCKWISE:
-			currentPlayerNum++;
+			gameState.currentPlayerTurn++;
 			break;
 		case COUNTERCLOCKWISE:
-			currentPlayerNum--;
+			gameState.currentPlayerTurn--;
 			break;
 		}
 
 		//Keeps the rotation in the range of the number of players
-		if (currentPlayerNum >= numOfPlayers)
+		if (gameState.currentPlayerTurn >= gameState.numOfPlayers)
 		{
-			currentPlayerNum -= numOfPlayers;
+			gameState.currentPlayerTurn -= gameState.numOfPlayers;
 		}
-		else if (currentPlayerNum < 0)
+		else if (gameState.currentPlayerTurn < 0)
 		{
-			currentPlayerNum += numOfPlayers;
+			gameState.currentPlayerTurn += gameState.numOfPlayers;
 		}
 
 		printf("\nUpper card:\n");
-		printCard(cardInPlay);
+		printCard(gameState.upperCard);
 	}
 
 	//When the while loop ends, it means there is a winner
-	printf("The winner is: %s", players[currentPlayerNum].name); //TODO
+	printf("The winner is... %s! Congratulations!\n\n", players[gameState.currentPlayerTurn].name);
 
-	//Statistics** TODO
-
-	//printf("The cards of player 1 are:\n");
-	//for (int i = 0; i < players[0].numOfCards; i++)
-	//printCard(players[0].cards[i]);
+	printStatistics(gameState);
 
 	
 }
@@ -201,7 +196,7 @@ int scanPlayers(Player** players)
 	return numOfPlayers;
 }
 
-Card genRndCard()
+Card genRndCard(GameState* gameState)
 {
 	Card card;
 	card.cardNum = (rand() % 14 + 1);
@@ -211,6 +206,7 @@ Card genRndCard()
 	{
 		card.cardColor = (rand() % 4 + 1);
 	}
+	gameState->statistics[card.cardNum]++;
 	return card;
 }
 
@@ -269,7 +265,7 @@ Card taki(Player* player, int cardPosition)
 		scanf("%d", &choice);
 		cardPosition = choice - 1;
 
-		if (choice = 0)
+		if (choice == 0)
 		{
 			return lastPlacedCard;
 		}
@@ -295,9 +291,9 @@ Card taki(Player* player, int cardPosition)
 
 //Gets a pointer to dynamic array of players and the number of players.
 //Updates the array to include a dynamic array of 4 cards as a start - the cards are chosen randomly.
-void handCards(Player* players, int numOfPlayers)
+void handCards(Player* players, GameState* gameState)
 {
-	for (int i = 0; i < numOfPlayers; i++)
+	for (int i = 0; i < gameState->numOfPlayers; i++)
 	{
 		players[i].cards = NULL;
 		players[i].cards = (Card*)malloc(STARTING_CARDS * sizeof(Card));
@@ -308,7 +304,7 @@ void handCards(Player* players, int numOfPlayers)
 		}
 		for (int j = 0; j < STARTING_CARDS; j++)
 		{
-			players[i].cards[j] = genRndCard();
+			players[i].cards[j] = genRndCard(gameState);
 			players[i].numOfCards++;
 		}
 		players[i].maxCards = players[i].numOfCards;
@@ -385,7 +381,7 @@ void printCards(Player player)
 }
 
 //Get the current player struct and the struct of the current card in play, a pointer for the current game direction and a pointer to the number of the current player
-Card turn(Player* player, Card cardInPlay, int* playDirection, int* currentPlayerNum)
+Card turn(Player* player, GameState* gameState)
 {
 	//Print the player's name and it's cards
 	printf("%s's turn:\n\n" , player->name);
@@ -406,13 +402,13 @@ Card turn(Player* player, Card cardInPlay, int* playDirection, int* currentPlaye
 
 		if (playerChoice == 0)
 		{
-			drawCard(player);
-			return cardInPlay;
+			drawCard(player, gameState);
+			return gameState->upperCard;
 		}
 		
 		else if (playerChoice > player->numOfCards ||
-				player->cards[cardPosition].cardColor != cardInPlay.cardColor &&
-				player->cards[cardPosition].cardNum != cardInPlay.cardNum &&
+				player->cards[cardPosition].cardColor != gameState->upperCard.cardColor &&
+				player->cards[cardPosition].cardNum != gameState->upperCard.cardNum &&
 				player->cards[cardPosition].cardColor != 0)
 		{
 			printf("Invalid card! Try again\n");
@@ -441,13 +437,13 @@ Card turn(Player* player, Card cardInPlay, int* playDirection, int* currentPlaye
 				switch (returnCard.cardNum) //TODO FINISH CASE
 				{
 				case PLUS:
-					returnCard = plus(currentPlayerNum, returnCard.cardColor);
+					returnCard = plus(gameState, returnCard.cardColor);
 					break;
 				case STOP:
-					returnCard = stop(currentPlayerNum, returnCard.cardColor);
+					returnCard = stop(gameState, returnCard.cardColor);
 					break;
 				case CHANGE_DIRECTION:
-					returnCard = changeDirection(playDirection, returnCard.cardColor);
+					returnCard = changeDirection(gameState, returnCard.cardColor);
 					break;
 				}
 			}
@@ -456,17 +452,17 @@ Card turn(Player* player, Card cardInPlay, int* playDirection, int* currentPlaye
 
 		else if (player->cards[cardPosition].cardNum == PLUS)
 		{
-				returnCard = plus(currentPlayerNum, player->cards[cardPosition].cardColor);
+				returnCard = plus(gameState, player->cards[cardPosition].cardColor);
 		}
 
 		else if (player->cards[cardPosition].cardNum == STOP)
 		{
-			returnCard = stop(currentPlayerNum, player->cards[cardPosition].cardColor);
+			returnCard = stop(gameState, player->cards[cardPosition].cardColor);
 		}
 
 		else if (player->cards[cardPosition].cardNum == CHANGE_DIRECTION)
 		{
-			returnCard = changeDirection(playDirection, player->cards[cardPosition].cardColor);
+			returnCard = changeDirection(gameState, player->cards[cardPosition].cardColor);
 	
 		}
 	}
@@ -494,54 +490,54 @@ void removeCard(Player* player, int cardPosition)
 
 }
 
-Card stop(int* currentPlayerNum, int color)
+Card stop(GameState* gameState, int color)
 {
 	Card returnCard;
 	returnCard.cardNum = STOP;
 	returnCard.cardColor = color;
 
 	//Apply the card's effect
-	int updatedPlayerNum = *currentPlayerNum;
-	updatedPlayerNum++;
-	*currentPlayerNum = updatedPlayerNum;
+	int updatedPlayerTurn = gameState->currentPlayerTurn;
+	updatedPlayerTurn++;
+	gameState->currentPlayerTurn = updatedPlayerTurn;
 	
 	return returnCard;
 }
 
-Card changeDirection(int* gameDirection, int color)
+Card changeDirection(GameState* gameState, int color)
 {
 	Card returnCard;
 	returnCard.cardNum = CHANGE_DIRECTION;
 	returnCard.cardColor = color;
 
 	//Apply the card's effect
-	if (*gameDirection == CLOCKWISE)
+	if (gameState->gameDirection == CLOCKWISE)
 	{
-		*gameDirection = COUNTERCLOCKWISE;
+		gameState->gameDirection = COUNTERCLOCKWISE;
 	}
 	else
 	{
-		*gameDirection = CLOCKWISE;
+		gameState->gameDirection = CLOCKWISE;
 	}
 
 	return returnCard;
 }
 
-Card plus(int* currentPlayer, int color)
+Card plus(GameState* gameState, int color)
 {
 	Card returnCard;
 	returnCard.cardNum = PLUS;
 	returnCard.cardColor = color;
 
 	//Apply the card's effect
-	int updatedPlayerNum = *currentPlayer;
-	updatedPlayerNum--;
-	*currentPlayer = updatedPlayerNum;
+	int updatedPlayerTurn = gameState->currentPlayerTurn;
+	updatedPlayerTurn--;
+	gameState->currentPlayerTurn = updatedPlayerTurn;
 
 	return returnCard;
 }
 
-void drawCard(Player* player)
+void drawCard(Player* player, GameState* gameState)
 {
 	//Check if there is a need to allocate more memory to draw another card
 	if (player->numOfCards == player->maxCards)
@@ -558,6 +554,41 @@ void drawCard(Player* player)
 		player->maxCards *= 2;
 	}
 
-	player->cards[player->numOfCards] = genRndCard();
+	player->cards[player->numOfCards] = genRndCard(gameState);
 	player->numOfCards++;
 }
+
+void printStatistics(GameState gameState)
+{
+	int counters[CARDS_VARIATIONS] = { 0 };
+
+
+	printf("************ Game Statistics ************\n");
+	printf("Card # | Frequency\n");
+	printf("__________________\n");
+	for (int i = 0; i < CARDS_VARIATIONS; i++)
+	{
+		printf("   +   |    %d", gameState.statistics[PLUS]);
+	}
+}
+
+
+/*
+************ Game Statistics ************
+Card # | Frequency
+__________________
+   +   |    2
+   3   |    2
+   1   |    2
+  <->  |    1
+ STOP  |    1
+   7   |    1
+   4   |    1
+ COLOR |    0
+ TAKI  |    0
+   9   |    0
+   8   |    0
+   6   |    0
+   5   |    0
+   2   |    0
+ SPACE7 SPACE4 (before) */
