@@ -54,6 +54,12 @@ typedef struct GameState
 
 } GameState;
 
+typedef struct CardStats //used to store the names and frequencies of drawn cards
+{
+	char cardName[6]; //enough characters to store "color" (largest card name) and NULL char
+	int amount;
+}CardStats;
+
 //Function decelerations//
 int scanPlayers(Player** players);
 void handCards(Player* players, GameState* gameState);
@@ -69,6 +75,7 @@ Card changeDirection(GameState* gameState, int color);
 Card plus(GameState* gameState, int color);
 void drawCard(Player* player);
 void printStatistics(GameState);
+void selectionSort(CardStats arr[], int n);
 
 int main()
 {
@@ -118,6 +125,8 @@ int main()
 			else // There is a winner
 			{
 				ongoing = false;
+				if (gameState.upperCard.cardNum == STOP) //if the player won with a stop card, reverts the ca
+					gameState.currentPlayerTurn--; 
 				break;
 			}
 		}
@@ -204,9 +213,9 @@ Card genRndCard(GameState* gameState)
 		card.cardColor = 0;
 	else
 	{
-		card.cardColor = (rand() % 4 + 1);
+		card.cardColor = 1;//(rand() % 4 + 1);
 	}
-	gameState->statistics[card.cardNum]++;
+	gameState->statistics[card.cardNum - 1]++;
 	return card;
 }
 
@@ -275,7 +284,7 @@ Card taki(Player* player, int cardPosition)
 			removeCard(player, cardPosition);
 			return lastPlacedCard;
 		}
-		else if (player->cards[cardPosition].cardColor = lastPlacedCard.cardColor)
+		else if (player->cards[cardPosition].cardColor == lastPlacedCard.cardColor)
 		{
 			lastPlacedCard = player->cards[cardPosition];
 			removeCard(player, cardPosition);
@@ -335,7 +344,6 @@ void printCard(Card card)
 		strcpy(printName, "COLOR");
 		break;
 	default:
-		//char printNum[] = { card.cardNum - '0' };
 		printName[0] = card.cardNum + '0';
 		printName[1] = '\0';
 		break;
@@ -363,8 +371,7 @@ void printCard(Card card)
 	printf("*********\n");
 	printf("*       *\n");
 	printf("*%*s%*s*\n", (unsigned int)(4 + strlen(printName) / 2), printName ,(unsigned int) (3 - strlen(printName) / 2), "");
-	if (printColor != 0)
-		printf("*   %c   *\n", printColor);
+	printf("*   %c   *\n", printColor);
 	printf("*       *\n");
 	printf("*********\n\n");
 }
@@ -448,6 +455,7 @@ Card turn(Player* player, GameState* gameState)
 				}
 			}
 		}
+		//
 		//End of taki case
 
 		else if (player->cards[cardPosition].cardNum == PLUS)
@@ -560,7 +568,31 @@ void drawCard(Player* player, GameState* gameState)
 
 void printStatistics(GameState gameState)
 {
-	int counters[CARDS_VARIATIONS] = { 0 };
+	//this array will hold the names and frequencies of each card
+	CardStats cardsStats[CARDS_VARIATIONS] = {0};
+
+	//setting the names of all the cards up to 9 (regular cards) to their number
+	for (int i = 0; i < 9; i++)
+	{
+		cardsStats[i].cardName[0] = i + '1'; // -1 to start the naming from 1 
+		cardsStats[i].cardName[1] = '\0'; // adding the null character
+	}
+
+	//setting the names of the special cards manually
+	strcpy(cardsStats[PLUS - 1].cardName, "PLUS");
+	strcpy(cardsStats[STOP - 1].cardName, "STOP");
+	strcpy(cardsStats[CHANGE_COLOR - 1].cardName, "COLOR");
+	strcpy(cardsStats[CHANGE_DIRECTION - 1].cardName, "<->");
+	strcpy(cardsStats[TAKI - 1].cardName, "TAKI");
+
+	//updating each card's amount based on its corresponding statistics index
+	for (int i = 0; i < CARDS_VARIATIONS; i++)
+	{
+		cardsStats[i].amount = gameState.statistics[i];
+	}
+	
+	//sorting the cards stats array using insertion sort
+	selectionSort(cardsStats, CARDS_VARIATIONS);
 
 
 	printf("************ Game Statistics ************\n");
@@ -568,7 +600,32 @@ void printStatistics(GameState gameState)
 	printf("__________________\n");
 	for (int i = 0; i < CARDS_VARIATIONS; i++)
 	{
-		printf("   +   |    %d", gameState.statistics[PLUS]);
+		printf("%*s%*s|    %d\n",(unsigned int)(3 + strlen(cardsStats[i].cardName) / 2), cardsStats[i].cardName,
+			(unsigned int)(4 - strlen(cardsStats[i].cardName) / 2), " ", cardsStats[i].amount);
+	}
+}
+
+void selectionSort(CardStats arr[], int n)
+{
+	int i, j, max;
+	CardStats tmp;
+
+	// One by one move boundary of unsorted subarray
+	for (i = 0; i < n - 1; i++)
+	{
+		// Find the minimum element in unsorted array
+		max = i;
+		for (j = i + 1; j < n; j++)
+			if (arr[j].amount > arr[max].amount)
+				max = j;
+
+		// Swap the found minimum element with the first element
+		if (max != i)
+		{
+			tmp = arr[max];
+			arr[max] = arr[i];
+			arr[i] = tmp;
+		}
 	}
 }
 
